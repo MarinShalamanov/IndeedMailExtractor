@@ -22,16 +22,25 @@ public class IndeedExtractor {
 	public String pass = null;
 
 	public PrintStream pw = System.out;
+	
+	private WebDriver driver = null;
+
+	public IndeedExtractor() {
+		loadCredentials();
+
+		System.setProperty("webdriver.chrome.driver", CHROME_DRIVER_PATH);
+		driver = new ChromeDriver();
+	}
 
 	private void loadCredentials() {
 		Scanner in = new Scanner(System.in);
-		
+
 		System.out.print("email: ");
 		email = in.nextLine();
 
 		System.out.print("Password: ");
 		pass = in.nextLine();
-		
+
 		in.close();
 	}
 
@@ -56,32 +65,31 @@ public class IndeedExtractor {
 	}
 
 	public void extract(String baseUrl, int firstPage, int lastPage) {
-		loadCredentials();
 		
+		if (driver != null) {
+			driver.quit();
+			driver = new ChromeDriver();
+		}
 		
-		System.setProperty("webdriver.chrome.driver", CHROME_DRIVER_PATH);
-
-		WebDriver driver = new ChromeDriver();
-
-		List<String> candidateUrls = new ArrayList<String>();
+		List<Candidate> candidates = new ArrayList<Candidate>();
 		Set<String> mails = new HashSet<String>();
 
 		for (int i = firstPage; i <= lastPage; i++) {
-			String currUrl = baseUrl + Integer.toString(i);
+			String currPageUrl = baseUrl + Integer.toString(i);
 
-			driver.get(currUrl);
+			driver.get(currPageUrl);
 
 			try {
 				WebElement signinEmail = driver.findElement(By
 						.id("signin_email"));
 				if (signinEmail != null) {
-					
+
 					signinEmail.sendKeys(email);
-					
+
 					WebElement signinPass = driver.findElement(By
 							.id("signin_password"));
 					signinPass.sendKeys(pass);
-					
+
 					signinPass.submit();
 				}
 			} catch (NoSuchElementException e) {
@@ -95,33 +103,44 @@ public class IndeedExtractor {
 
 			List<WebElement> links = driver.findElements(By
 					.className("candidate-link"));
+
 			for (WebElement link : links) {
-				String currCanditateUrl = link.getAttribute("href");
-				candidateUrls.add(currCanditateUrl);
+				String currName = link.getText();
+				String currUrl = link.getAttribute("href");
+
+				Candidate currCanditate = new Candidate(currName, currUrl);
+				candidates.add(currCanditate);
 			}
 		}
 
-		for (String candidateUrl : candidateUrls) {
-			driver.get(candidateUrl);
+		for (Candidate candidate : candidates) {
+			driver.get(candidate.getUrl());
 			try {
 				Thread.sleep(500);
 			} catch (InterruptedException e1) {
 				e1.printStackTrace();
 			}
 			Scanner scanner = new Scanner(driver.getPageSource());
-			scanner.useDelimiter("[ ><\t\n\r\"':=]/");
+			scanner.useDelimiter("[ ><\t\n\r\"':=]");
 
 			while (scanner.hasNext()) {
-				String next = scanner.next();
+				String next = scanner.next().toLowerCase();
 				if (isValidEmail(next) && !mails.contains(next)) {
+					candidate.setEmail(next);
 					mails.add(next);
-					System.out.println(next);
-					pw.println(next);
+
+					String log = candidate.getName() + ", " + next;
+					System.out.println(log);
+					pw.println(log);
 				}
 			}
 
 		}
-
+		
+		pw.close();
+	}
+	
+	public void finish() {
 		driver.quit();
 	}
 	
